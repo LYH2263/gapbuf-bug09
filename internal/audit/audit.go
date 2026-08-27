@@ -62,9 +62,18 @@ func (l *Logger) Rotate(newPath string) error {
 	}
 	f, err := os.OpenFile(newPath, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o644)
 	if err != nil {
+		// Leave the previous handle open so logging can continue on the
+		// old file until a later rotation succeeds.
 		return err
 	}
-	// leak old handle
+	// Close the previous handle so the old log file can be removed or renamed.
+	// On Windows an open file handle locks the file; leaving it open blocks
+	// cleanup and surfaces as "file in use" errors during automated rotation.
+	// Open the new file first so a failure does not leave the logger without
+	// any writable handle.
+	if l.f != nil {
+		_ = l.f.Close()
+	}
 	l.f = f
 	l.path = newPath
 	return nil
